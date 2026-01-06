@@ -50,8 +50,8 @@ if df_raw.empty:
     st.stop()
 
 # Preview
-st.subheader("Pré-visualização")
-st.dataframe(df_raw.head(15), use_container_width=True)
+#st.subheader("Pré-visualização")
+#st.dataframe(df_raw.head(15), use_container_width=True)
 
 # ======================================================
 # Converte para numérico
