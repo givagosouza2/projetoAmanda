@@ -14,7 +14,7 @@ st.set_page_config(
 st.title("Visualização 2 × 3 de séries temporais (Matplotlib)")
 st.caption("fs = 1000 Hz | Organização fixa por cabeçalho")
 
-FS_DEFAULT = 1000.0
+FS_DEFAULT = 1200.0
 
 # ======================================================
 # Upload do arquivo
