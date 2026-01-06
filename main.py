@@ -96,27 +96,6 @@ else:
     xmin, xmax = 0.0, t_end
 
 # ======================================================
-# Monta tabela de leituras no cursor
-# ======================================================
-readouts = []
-missing = []
-
-for side in range(2):
-    for name in LAYOUT[side]:
-        if name in df.columns:
-            y = df[name].to_numpy()
-            val = float(y[i0]) if not np.isnan(y[i0]) else np.nan
-            readouts.append({"Sinal": name, "Tempo (s)": t0_eff, "Amostra": i0, "Amplitude": val})
-        else:
-            missing.append(name)
-
-st.write("**Leituras no cursor (amostra mais próxima):**")
-st.dataframe(pd.DataFrame(readouts), use_container_width=True)
-
-if missing:
-    st.warning("Colunas ausentes no arquivo: " + ", ".join(missing))
-
-# ======================================================
 # Plot 2×3 com linha vertical do cursor
 # ======================================================
 st.divider()
@@ -163,3 +142,24 @@ st.pyplot(fig, use_container_width=True)
 plt.close(fig)
 
 st.success(f"Cursor em t = {t0_eff:.4f} s (amostra {i0}).")
+
+# ======================================================
+# Monta tabela de leituras no cursor
+# ======================================================
+readouts = []
+missing = []
+
+for side in range(2):
+    for name in LAYOUT[side]:
+        if name in df.columns:
+            y = df[name].to_numpy()
+            val = float(y[i0]) if not np.isnan(y[i0]) else np.nan
+            readouts.append({"Sinal": name, "Tempo (s)": t0_eff, "Amostra": i0, "Amplitude": val})
+        else:
+            missing.append(name)
+
+st.write("**Leituras no cursor (amostra mais próxima):**")
+st.dataframe(pd.DataFrame(readouts), use_container_width=True)
+
+if missing:
+    st.warning("Colunas ausentes no arquivo: " + ", ".join(missing))
