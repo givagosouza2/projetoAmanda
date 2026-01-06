@@ -10,7 +10,7 @@ st.set_page_config(page_title="Cursor global 2x3", layout="wide")
 st.title("Séries temporais 2×3 com cursor global (Matplotlib)")
 st.caption("fs = 1000 Hz | Slider controla um cursor temporal comum em todos os gráficos.")
 
-FS_DEFAULT = 1000.0
+FS_DEFAULT = 1200.0
 
 # Ordem fixa desejada
 LAYOUT = [
