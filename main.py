@@ -7,20 +7,20 @@ import matplotlib.pyplot as plt
 # Configuração da página
 # ======================================================
 st.set_page_config(
-    page_title="Visualizador de Séries Temporais (Matplotlib)",
+    page_title="Layout 2x3 – Séries Temporais",
     layout="wide"
 )
 
-st.title("Visualizador de séries temporais por coluna (Matplotlib)")
-st.caption("Cada coluna numérica é exibida em um gráfico separado. fs = 1000 Hz.")
+st.title("Visualização 2 × 3 de séries temporais (Matplotlib)")
+st.caption("fs = 1000 Hz | Organização fixa por cabeçalho")
 
 FS_DEFAULT = 1000.0
 
 # ======================================================
-# Upload
+# Upload do arquivo
 # ======================================================
 uploaded_file = st.file_uploader(
-    "Carregue um arquivo (.xlsx, .xls ou .csv)",
+    "Carregue o arquivo (.xlsx, .xls ou .csv)",
     type=["xlsx", "xls", "csv"]
 )
 
@@ -49,7 +49,7 @@ def read_file(file):
             xls = pd.ExcelFile(file)
         except ImportError:
             st.error(
-                "Dependência ausente: **openpyxl**\n\n"
+                "Dependência ausente: openpyxl\n\n"
                 "Instale com:\n`pip install openpyxl`"
             )
             st.stop()
@@ -73,130 +73,80 @@ def read_file(file):
     return df
 
 
-df_raw = read_file(uploaded_file)
+df = read_file(uploaded_file)
 
-if df_raw.empty:
-    st.error("Arquivo carregado, mas sem dados.")
+if df.empty:
+    st.error("Arquivo sem dados.")
     st.stop()
-
-# ======================================================
-# Pré-visualização
-# ======================================================
-st.subheader("Pré-visualização")
-st.dataframe(df_raw.head(20), use_container_width=True)
-
-# ======================================================
-# Configuração do tempo
-# ======================================================
-st.subheader("Configuração do eixo temporal")
-
-time_mode = st.radio(
-    "Definição do tempo",
-    ["Gerar automaticamente (fs = 1000 Hz)", "Usar coluna existente"],
-    horizontal=True
-)
-
-cols = list(df_raw.columns)
-
-if time_mode == "Usar coluna existente":
-    time_col = st.selectbox("Selecione a coluna de tempo", cols)
-    t = pd.to_numeric(df_raw[time_col], errors="coerce").values
-    valid = ~np.isnan(t)
-    df_work = df_raw.loc[valid].copy()
-    t = t[valid]
-    df_work.drop(columns=[time_col], inplace=True)
-else:
-    df_work = df_raw.copy()
-    t = np.arange(len(df_work)) / fs
 
 # ======================================================
 # Converter colunas para numérico
 # ======================================================
-for c in df_work.columns:
-    df_work[c] = pd.to_numeric(df_work[c], errors="coerce")
+for c in df.columns:
+    df[c] = pd.to_numeric(df[c], errors="coerce")
 
-df_work.dropna(axis=1, how="all", inplace=True)
-
-if df_work.empty:
-    st.error("Nenhuma coluna numérica válida encontrada.")
-    st.stop()
-
-numeric_cols = list(df_work.columns)
+df.dropna(axis=1, how="all", inplace=True)
 
 # ======================================================
-# Opções de plotagem
+# Tempo
 # ======================================================
-st.subheader("Opções de visualização")
-
-c1, c2, c3 = st.columns(3)
-
-with c1:
-    mode = st.radio(
-        "Modo",
-        ["Todas as colunas", "Selecionar colunas"]
-    )
-
-with c2:
-    max_plots = st.number_input(
-        "Número máximo de gráficos",
-        min_value=1,
-        max_value=len(numeric_cols),
-        value=min(20, len(numeric_cols)),
-        step=1
-    )
-
-with c3:
-    downsample = st.number_input(
-        "Downsample (1 = sem redução)",
-        min_value=1,
-        value=1,
-        step=1
-    )
-
-if mode == "Selecionar colunas":
-    selected_cols = st.multiselect(
-        "Selecione as colunas",
-        numeric_cols,
-        default=numeric_cols[:min(5, len(numeric_cols))]
-    )
-else:
-    selected_cols = numeric_cols
-
-selected_cols = selected_cols[: int(max_plots)]
+t = np.arange(len(df)) / fs
 
 # ======================================================
-# Downsample
+# Ordem fixa desejada
 # ======================================================
-idx = np.arange(0, len(t), int(downsample))
-t_ds = t[idx]
-df_ds = df_work.iloc[idx].copy()
+layout_cols = [
+    ["0.4 cpd BW", "2 cpd BW", "6 cpd BW"],  # esquerda
+    ["0.4 cpd RG", "2 cpd RG", "6 cpd RG"],  # direita
+]
 
 # ======================================================
-# Plotagem com Matplotlib
+# Plotagem 2 × 3
 # ======================================================
 st.divider()
-st.subheader("Gráficos")
+st.subheader("Gráficos organizados (2 colunas × 3 linhas)")
 
-for col in selected_cols:
-    y = df_ds[col].values
+fig, axes = plt.subplots(
+    nrows=3,
+    ncols=2,
+    figsize=(14, 9),
+    sharex=True
+)
 
-    if np.all(np.isnan(y)):
-        continue
+for col_idx, col_group in enumerate(layout_cols):
+    for row_idx, col_name in enumerate(col_group):
+        ax = axes[row_idx, col_idx]
 
-    fig, ax = plt.subplots(figsize=(10, 3))
-    ax.plot(t_ds, y, linewidth=0.8)
-    ax.set_xlabel("Tempo (s)")
-    ax.set_ylabel(col)
-    ax.set_title(col)
-    ax.grid(True, alpha=0.3)
+        if col_name in df.columns:
+            y = df[col_name].values
+            ax.plot(t, y, linewidth=0.8)
+            ax.set_ylabel(col_name)
+        else:
+            ax.text(
+                0.5,
+                0.5,
+                f"Coluna ausente:\n{col_name}",
+                ha="center",
+                va="center",
+                transform=ax.transAxes,
+                fontsize=10,
+                color="red"
+            )
 
-    st.pyplot(fig, use_container_width=True)
-    plt.close(fig)
+        ax.grid(True, alpha=0.3)
+
+# Rótulos finais
+axes[-1, 0].set_xlabel("Tempo (s)")
+axes[-1, 1].set_xlabel("Tempo (s)")
+
+axes[0, 0].set_title("BW")
+axes[0, 1].set_title("RG")
+
+plt.tight_layout()
+st.pyplot(fig, use_container_width=True)
+plt.close(fig)
 
 # ======================================================
 # Final
 # ======================================================
-st.success(
-    f"{len(selected_cols)} gráficos exibidos "
-    f"(de {len(numeric_cols)} colunas numéricas)."
-)
+st.success("Layout 2 × 3 gerado com sucesso.")
