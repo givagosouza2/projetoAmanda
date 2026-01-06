@@ -154,7 +154,7 @@ for side in range(2):
         if name in df.columns:
             y = df[name].to_numpy()
             val = float(y[i0]) if not np.isnan(y[i0]) else np.nan
-            readouts.append({"Sinal": name, "Tempo (s)": t0_eff, "Amostra": i0, "Amplitude": val})
+            readouts.append({"Sinal": name, "Tempo (s)": t0_eff, "Amostra": i0, "Amplitude": val*10**6})
         else:
             missing.append(name)
 
