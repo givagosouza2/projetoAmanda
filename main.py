@@ -1,139 +1,202 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
 
-st.set_page_config(page_title="Plot por coluna (1000 Hz)", layout="wide")
+# ======================================================
+# Configuração da página
+# ======================================================
+st.set_page_config(
+    page_title="Visualizador de Séries Temporais (Matplotlib)",
+    layout="wide"
+)
 
-st.title("Visualizador de séries temporais por coluna")
-st.caption("Carregue um arquivo (.xlsx/.csv). Cada coluna numérica vira um gráfico separado. fs = 1000 Hz.")
+st.title("Visualizador de séries temporais por coluna (Matplotlib)")
+st.caption("Cada coluna numérica é exibida em um gráfico separado. fs = 1000 Hz.")
 
-FS_DEFAULT = 1200.0
+FS_DEFAULT = 1000.0
 
-uploaded = st.file_uploader("Escolha o arquivo", type=["xlsx", "xls", "csv"])
+# ======================================================
+# Upload
+# ======================================================
+uploaded_file = st.file_uploader(
+    "Carregue um arquivo (.xlsx, .xls ou .csv)",
+    type=["xlsx", "xls", "csv"]
+)
 
-# -------------------------
-# Helpers
-# -------------------------
-def _read_file(file, file_name: str):
-    if file_name.lower().endswith((".xlsx", ".xls")):
-        xls = pd.ExcelFile(file)
-        return xls, xls.sheet_names
+if uploaded_file is None:
+    st.info("⬆️ Envie um arquivo para iniciar.")
+    st.stop()
+
+# ======================================================
+# Frequência de amostragem
+# ======================================================
+fs = st.number_input(
+    "Frequência de amostragem (Hz)",
+    min_value=1.0,
+    value=FS_DEFAULT,
+    step=1.0
+)
+
+# ======================================================
+# Leitura do arquivo
+# ======================================================
+def read_file(file):
+    name = file.name.lower()
+
+    if name.endswith((".xlsx", ".xls")):
+        try:
+            xls = pd.ExcelFile(file)
+        except ImportError:
+            st.error(
+                "Dependência ausente: **openpyxl**\n\n"
+                "Instale com:\n`pip install openpyxl`"
+            )
+            st.stop()
+
+        sheet = st.selectbox("Selecione a aba (sheet)", xls.sheet_names)
+        header_row = st.number_input(
+            "Linha do cabeçalho (0 = primeira linha)",
+            min_value=0,
+            value=0,
+            step=1
+        )
+
+        df = pd.read_excel(
+            xls,
+            sheet_name=sheet,
+            header=int(header_row)
+        )
     else:
         df = pd.read_csv(file)
-        return df, None
 
-def _to_numeric_df(df: pd.DataFrame):
-    # Converte o que der para número e remove colunas completamente vazias/não-numéricas
-    out = df.copy()
-    for c in out.columns:
-        out[c] = pd.to_numeric(out[c], errors="coerce")
-    out = out.dropna(axis=1, how="all")
-    return out
+    return df
 
-def _make_time(n: int, fs: float):
-    return np.arange(n, dtype=float) / fs
 
-# -------------------------
-# UI
-# -------------------------
-if uploaded is None:
-    st.info("Envie um arquivo para começar.")
+df_raw = read_file(uploaded_file)
+
+if df_raw.empty:
+    st.error("Arquivo carregado, mas sem dados.")
     st.stop()
 
-fs = st.number_input("Frequência de amostragem (Hz)", min_value=1.0, value=FS_DEFAULT, step=1.0)
-
-data_obj, sheet_names = _read_file(uploaded, uploaded.name)
-
-if sheet_names is not None:
-    col1, col2 = st.columns([2, 3])
-    with col1:
-        sheet = st.selectbox("Aba (sheet)", sheet_names)
-    with col2:
-        header_row = st.number_input("Linha do cabeçalho (0 = primeira linha)", min_value=0, value=0, step=1)
-    df_raw = pd.read_excel(data_obj, sheet_name=sheet, header=int(header_row))
-else:
-    df_raw = data_obj
-
-if df_raw is None or df_raw.empty:
-    st.error("Não consegui ler dados do arquivo (dataframe vazio).")
-    st.stop()
-
+# ======================================================
+# Pré-visualização
+# ======================================================
 st.subheader("Pré-visualização")
 st.dataframe(df_raw.head(20), use_container_width=True)
 
-# Detecta colunas
-cols = list(df_raw.columns)
-if len(cols) == 0:
-    st.error("Não encontrei colunas no arquivo.")
-    st.stop()
-
-st.subheader("Configuração do eixo do tempo")
+# ======================================================
+# Configuração do tempo
+# ======================================================
+st.subheader("Configuração do eixo temporal")
 
 time_mode = st.radio(
-    "Como criar o eixo do tempo?",
-    ["Gerar pelo fs (1000 Hz)", "Usar uma coluna de tempo existente"],
-    horizontal=True,
+    "Definição do tempo",
+    ["Gerar automaticamente (fs = 1000 Hz)", "Usar coluna existente"],
+    horizontal=True
 )
 
-t_col = None
-if time_mode == "Usar uma coluna de tempo existente":
-    t_col = st.selectbox("Escolha a coluna de tempo", cols)
+cols = list(df_raw.columns)
 
-# Data numérica
-if time_mode == "Usar uma coluna de tempo existente":
-    t = pd.to_numeric(df_raw[t_col], errors="coerce").to_numpy()
-    # Remove linhas onde tempo é NaN
-    mask = ~np.isnan(t)
-    df_plot_base = df_raw.loc[mask].copy()
-    t = t[mask]
-    # Converte outras colunas para numérico
-    df_num = _to_numeric_df(df_plot_base.drop(columns=[t_col], errors="ignore"))
+if time_mode == "Usar coluna existente":
+    time_col = st.selectbox("Selecione a coluna de tempo", cols)
+    t = pd.to_numeric(df_raw[time_col], errors="coerce").values
+    valid = ~np.isnan(t)
+    df_work = df_raw.loc[valid].copy()
+    t = t[valid]
+    df_work.drop(columns=[time_col], inplace=True)
 else:
-    df_num = _to_numeric_df(df_raw)
-    t = _make_time(len(df_num), fs)
+    df_work = df_raw.copy()
+    t = np.arange(len(df_work)) / fs
 
-if df_num.empty:
-    st.error("Não há colunas numéricas para plotar após conversão.")
+# ======================================================
+# Converter colunas para numérico
+# ======================================================
+for c in df_work.columns:
+    df_work[c] = pd.to_numeric(df_work[c], errors="coerce")
+
+df_work.dropna(axis=1, how="all", inplace=True)
+
+if df_work.empty:
+    st.error("Nenhuma coluna numérica válida encontrada.")
     st.stop()
 
-st.subheader("O que plotar")
-num_cols = list(df_num.columns)
+numeric_cols = list(df_work.columns)
 
-colA, colB, colC = st.columns([2, 2, 2])
-with colA:
-    mode = st.radio("Modo", ["Plotar todas as colunas (gráficos separados)", "Selecionar colunas"], horizontal=False)
-with colB:
-    max_plots = st.number_input("Máx. de gráficos (evita travar)", min_value=1, value=min(30, len(num_cols)), step=1)
-with colC:
-    downsample = st.number_input("Downsample (pegar 1 a cada N pontos)", min_value=1, value=1, step=1)
+# ======================================================
+# Opções de plotagem
+# ======================================================
+st.subheader("Opções de visualização")
+
+c1, c2, c3 = st.columns(3)
+
+with c1:
+    mode = st.radio(
+        "Modo",
+        ["Todas as colunas", "Selecionar colunas"]
+    )
+
+with c2:
+    max_plots = st.number_input(
+        "Número máximo de gráficos",
+        min_value=1,
+        max_value=len(numeric_cols),
+        value=min(20, len(numeric_cols)),
+        step=1
+    )
+
+with c3:
+    downsample = st.number_input(
+        "Downsample (1 = sem redução)",
+        min_value=1,
+        value=1,
+        step=1
+    )
 
 if mode == "Selecionar colunas":
-    chosen = st.multiselect("Selecione as colunas", num_cols, default=num_cols[:min(5, len(num_cols))])
+    selected_cols = st.multiselect(
+        "Selecione as colunas",
+        numeric_cols,
+        default=numeric_cols[:min(5, len(numeric_cols))]
+    )
 else:
-    chosen = num_cols
+    selected_cols = numeric_cols
 
-# Aplica downsample
+selected_cols = selected_cols[: int(max_plots)]
+
+# ======================================================
+# Downsample
+# ======================================================
 idx = np.arange(0, len(t), int(downsample))
 t_ds = t[idx]
-df_ds = df_num.iloc[idx].copy()
+df_ds = df_work.iloc[idx].copy()
 
-# Limita número de gráficos
-chosen = chosen[: int(max_plots)]
-
+# ======================================================
+# Plotagem com Matplotlib
+# ======================================================
 st.divider()
 st.subheader("Gráficos")
 
-# Usando line_chart (rápido) em gráficos separados
-# Para cada coluna, montamos um DataFrame com índice tempo.
-for c in chosen:
-    series = pd.to_numeric(df_ds[c], errors="coerce")
-    if series.isna().all():
+for col in selected_cols:
+    y = df_ds[col].values
+
+    if np.all(np.isnan(y)):
         continue
 
-    chart_df = pd.DataFrame({c: series.to_numpy()}, index=t_ds)
-    chart_df.index.name = "tempo (s)"
+    fig, ax = plt.subplots(figsize=(10, 3))
+    ax.plot(t_ds, y, linewidth=0.8)
+    ax.set_xlabel("Tempo (s)")
+    ax.set_ylabel(col)
+    ax.set_title(col)
+    ax.grid(True, alpha=0.3)
 
-    with st.expander(f"Coluna: {c}", expanded=True):
-        st.line_chart(chart_df, height=220, use_container_width=True)
+    st.pyplot(fig, use_container_width=True)
+    plt.close(fig)
 
-st.success(f"Pronto! Colunas plotadas: {len(chosen)} / {len(num_cols)}")
+# ======================================================
+# Final
+# ======================================================
+st.success(
+    f"{len(selected_cols)} gráficos exibidos "
+    f"(de {len(numeric_cols)} colunas numéricas)."
+)
